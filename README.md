@@ -28,7 +28,7 @@
             background: white;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
         }
-        .product-list, .add-product, .login-form, .register-form {
+        .product-list, .add-product, .login-form, .register-form, .search-form {
             text-align: left;
             margin-top: 20px;
         }
@@ -113,11 +113,10 @@
         <button onclick="customerLogin()">تسجيل دخول الزبائن</button>
     </div>
     <div class="register-form">
-        <h3><a href="#">تسجيل زبون جديد</a></h3>
+        <h3><a href="#" onclick="registerCustomer()">تسجيل زبون جديد</a></h3>
     </div>
 </div>
 
-<!-- صفحة المنتجات للموظفين -->
 <!-- صفحة المنتجات للموظفين -->
 <div class="container" id="employee-container" style="display: none;">
     <h2>المنتجات</h2>
@@ -132,9 +131,14 @@
         <input type="text" id="product-barcode" placeholder="الباركود" required>
         <button onclick="addProduct()">إضافة</button>
     </div>
+    <div class="scanner-container" id="scanner-container">
+        <h3>مسح الباركود</h3>
+        <video id="scanner" style="width: 100%;"></video>
+        <button onclick="stopScanner()">إيقاف المسح</button>
+    </div>
+    <button onclick="startScanner()">مسح الباركود</button>
     <button onclick="goBackToLogin()">العودة إلى صفحة تسجيل الدخول</button>
 </div>
-
 
 <!-- صفحة المنتجات للزبائن -->
 <div class="container" id="customer-container" style="display: none;">
@@ -185,7 +189,7 @@
         const password = document.getElementById('employee-password').value;
 
         // تحقق من بيانات الدخول
-        if (username === 'admin' && password === '1234') {
+        if (username === 'employee' && password === '1234') {
             loginContainer.style.display = 'none';
             employeeContainer.style.display = 'block';
         } else {
@@ -214,7 +218,16 @@
 
     // دالة تسجيل زبون جديد
     function registerCustomer() {
-        alert('تسجيل زبون جديد');
+        const username = prompt('ادخل اسم المستخدم:');
+        const password = prompt('ادخل كلمة المرور:');
+
+        if (username && password) {
+            let customers = localStorage.getItem('customers');
+            customers = customers ? JSON.parse(customers) : [];
+            customers.push({ username, password });
+            localStorage.setItem('customers', JSON.stringify(customers));
+            alert('تم تسجيل الزبون بنجاح');
+        }
     }
 
     // دالة العودة إلى صفحة تسجيل الدخول
@@ -235,20 +248,43 @@
         location.reload();
     }
 
+    // دالة لتعديل المنتج
+    function editProduct(productName) {
+        const newName = prompt('ادخل الاسم الجديد للمنتج:', productName);
+        const newPrice = prompt('ادخل السعر الجديد للمنتج:');
+        
+        if (newName && newPrice) {
+            let products = localStorage.getItem('products');
+            products = products ? JSON.parse(products) : [];
+
+            const productIndex = products.findIndex(product => product.name === productName);
+            if (productIndex !== -1) {
+                products[productIndex].name = newName;
+                products[productIndex].price = newPrice;
+                localStorage.setItem('products', JSON.stringify(products));
+
+                // إعادة تحميل الصفحة لعرض التغييرات
+                location.reload();
+            }
+        }
+    }
+
     // دالة إضافة منتج
     function addProduct() {
         const name = document.getElementById('product-name').value;
         const price = document.getElementById('product-price').value;
+        const barcode = document.getElementById('product-barcode').value;
 
         // تحقق من ملء الحقول
-        if (name && price) {
-            const product = { name, price };
+        if (name && price && barcode) {
+            const product = { name, price, barcode };
             saveProduct(product);
             displayProduct(product);
 
             // تفريغ الحقول
             document.getElementById('product-name').value = '';
             document.getElementById('product-price').value = '';
+            document.getElementById('product-barcode').value = '';
         } else {
             alert('يرجى ملء جميع الحقول');
         }
@@ -265,7 +301,7 @@
     // دالة تحميل المنتجات من التخزين المحلي
     function loadProducts() {
         let products = localStorage.getItem('products');
-        products = products           ? JSON.parse(products) : [];
+        products = products ? JSON.parse(products) : [];
         products.forEach(product => displayProduct(product));
     }
 
@@ -274,8 +310,25 @@
         const productDiv = document.createElement('div');
         productDiv.className = 'product';
         productDiv.innerHTML = `<strong>${product.name}</strong>: $${product.price}`;
+        
+        // إضافة زر لحذف المنتج
+        const deleteButton = document.createElement('button');
+        deleteButton.textContent = 'حذف';
+        deleteButton.onclick = () => deleteProduct(product.name);
+        productDiv.appendChild(deleteButton);
+
+        // إضافة زر لتعديل المنتج
+        const editButton = document.createElement('button');
+        editButton.textContent = 'تعديل';
+        editButton.onclick = () => editProduct(product.name);
+        productDiv.appendChild(editButton);
+
+        employeeProductList.appendChild(productDiv);
 
         const productDivForCustomer = productDiv.cloneNode(true);
+        // إزالة زر الحذف والتعديل للزبائن
+        productDivForCustomer.removeChild(productDivForCustomer.querySelector('button'));
+        productDivForCustomer.removeChild(productDivForCustomer.querySelector('button'));
         customerProductList.appendChild(productDivForCustomer);
     }
 
@@ -303,6 +356,12 @@
         const scanner = new Instascan.Scanner({ video: document.getElementById('scanner') });
         scanner.addListener('scan', function (content) {
             alert('تم قراءة الباركود: ' + content);
+            const product = findProductByBarcode(content);
+            if (product) {
+                alert(`اسم المنتج: ${product.name}, السعر: $${product.price}`);
+            } else {
+                alert('لم يتم العثور على منتج لهذا الباركود');
+            }
             stopScanner();
         });
 
@@ -320,6 +379,13 @@
     // دالة إيقاف مسح الباركود
     function stopScanner() {
         scannerContainer.style.display = 'none';
+    }
+
+    // دالة للعثور على المنتج بواسطة الباركود
+    function findProductByBarcode(barcode) {
+        let products = localStorage.getItem('products');
+        products = products ? JSON.parse(products) : [];
+        return products.find(product => product.barcode === barcode);
     }
 
 </script>
